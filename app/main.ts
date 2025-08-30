@@ -54,7 +54,7 @@ function handleGet(path: string, incomingData: string[]): string {
     // Get the compression type from headers
     const acceptEncoding = getHeader(incomingData, "Accept-Encoding");
     console.log("Accept-Encoding:", acceptEncoding);
-    if (acceptEncoding !== "gzip") {
+    if (acceptEncoding.includes("gzip")) {
       console.log("Unsupported encoding:", acceptEncoding);
       return buildResponse("HTTP/1.1 200 OK", echoText);
     }
