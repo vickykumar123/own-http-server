@@ -135,7 +135,12 @@ const server = net.createServer((socket) => {
 
     socket.write(result.headers + "\r\n\r\n");
     socket.write(result.body);
-    socket.end();
+
+    // Close connection only if client requests it
+    const connectionHeader = getHeader(incomingData, "Connection");
+    if (connectionHeader === "close") {
+      socket.end();
+    }
   });
 });
 
