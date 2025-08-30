@@ -2,6 +2,7 @@ import * as net from "net";
 import * as fs from "fs";
 import * as process from "process";
 import * as zlib from "zlib";
+import * as tls from "tls";
 
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 console.log("Logs from your program will appear here!");
@@ -13,7 +14,7 @@ function buildResponse(
   customHeaders: {[key: string]: string} = {}
 ): {headers: string; body: string | Buffer} {
   const bodyLength = Buffer.isBuffer(body) ? body.length : body.length;
-  let headers = `${statusLine}\r\nContent-Length: ${bodyLength}`;
+  let headers = `${statusLine}\r\nContent-Length: ${bodyLength}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Credentials: true`;
   if (!customHeaders["Content-Type"]) {
     headers += `\r\nContent-Type: text/plain`;
   }
@@ -48,13 +49,16 @@ for (let i = 0; i < args.length; i++) {
 
 // Function to handle GET requests
 function handleGet(
-  path: string,
+  pathname: string,
+  searchParams: URLSearchParams,
   incomingData: string[]
 ): {headers: string; body: string | Buffer} {
-  if (path === "/" || path === "/index.html") {
+  console.log("Pathname:", pathname);
+  console.log("Search Params:", searchParams.toString());
+  if (pathname === "/" || pathname === "/index.html") {
     return buildResponse("HTTP/1.1 200 OK", "Hello from index!");
-  } else if (path.startsWith("/echo/")) {
-    const echoText = decodeURIComponent(path.slice(6));
+  } else if (pathname.startsWith("/echo/")) {
+    const echoText = decodeURIComponent(pathname.slice(6));
 
     const acceptEncoding = getHeader(incomingData, "Accept-Encoding");
     console.log("Accept-Encoding:", acceptEncoding);
@@ -66,13 +70,13 @@ function handleGet(
       };
     }
     return buildResponse("HTTP/1.1 200 OK", echoText);
-  } else if (path.startsWith("/user-agent")) {
+  } else if (pathname.startsWith("/user-agent")) {
     console.log("Incoming Data:", incomingData);
     const userAgent = getHeader(incomingData, "User-Agent");
     console.log("User-Agent:", userAgent);
     return buildResponse("HTTP/1.1 200 OK", userAgent);
-  } else if (path.startsWith("/files/")) {
-    const fileName = path.slice(7);
+  } else if (pathname.startsWith("/files/")) {
+    const fileName = pathname.slice(7);
     const filePath = directory + "/" + fileName;
     try {
       const readFile = fs.readFileSync(filePath, "utf-8");
@@ -82,17 +86,34 @@ function handleGet(
     } catch (e) {
       return {headers: "HTTP/1.1 404 Not Found", body: ""};
     }
+  } else if (pathname === "/search") {
+    const q = searchParams.get("q");
+    const limit = searchParams.get("limit");
+    const p = searchParams.get("page");
+    return buildResponse(
+      "HTTP/1.1 200 OK",
+      JSON.stringify({
+        query: q,
+        limit: limit ? parseInt(limit) : 10,
+        page: p ? parseInt(p) : 1,
+        Results: [`Item 1 for ${q}`, `Item 2 for ${q}`],
+      }),
+      {
+        "Content-Type": "application/json",
+      }
+    );
   } else {
     return buildResponse("HTTP/1.1 404 Not Found", "404 Not Found");
   }
 }
 
 function handlePost(
-  path: string,
+  pathname: string,
+  searchParams: URLSearchParams,
   incomingData: string[]
 ): {headers: string; body: string | Buffer} {
-  if (path.startsWith("/files/")) {
-    const fileName = path.slice(7);
+  if (pathname.startsWith("/files/")) {
+    const fileName = pathname.slice(7);
     const filePath = directory + "/" + fileName;
     const incomingDataStr = incomingData.join("\r\n");
     const bodyIndex = incomingDataStr.indexOf("\r\n\r\n");
@@ -107,7 +128,11 @@ function handlePost(
 }
 
 // Uncomment this to pass the first stage
-const server = net.createServer((socket) => {
+const options = {
+  key: fs.readFileSync("key.pem"),
+  cert: fs.readFileSync("cert.pem"),
+};
+const server = tls.createServer(options, (socket) => {
   // socket.setEncoding("utf-8");
 
   socket.on("data", (data: Buffer) => {
@@ -125,10 +150,23 @@ const server = net.createServer((socket) => {
 
     let result: {headers: string; body: string | Buffer};
 
-    if (method === "GET") {
-      result = handleGet(path, incomingData);
+    // Parse URL and query parameters
+    const host = getHeader(incomingData, "Host");
+    const url = new URL(path, `https://${host || "localhost:443"}`);
+    const pathname = url.pathname;
+    const searchParams = url.searchParams;
+
+    if (method === "OPTIONS") {
+      // Handle CORS preflight requests
+      result = {
+        headers:
+          "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Authorization, User-Agent, Accept-Encoding\r\nAccess-Control-Max-Age: 86400\r\n",
+        body: "",
+      };
+    } else if (method === "GET") {
+      result = handleGet(pathname, searchParams, incomingData);
     } else if (method === "POST") {
-      result = handlePost(path, incomingData);
+      result = handlePost(pathname, searchParams, incomingData);
     } else {
       result = buildResponse("HTTP/1.1 404 Not Found", "404 Not Found");
     }
@@ -149,4 +187,4 @@ const server = net.createServer((socket) => {
   });
 });
 
-server.listen(4221, "localhost");
+server.listen(443, "localhost");
