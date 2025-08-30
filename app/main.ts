@@ -1,6 +1,7 @@
 import * as net from "net";
 import * as fs from "fs";
 import * as process from "process";
+import * as zlib from "zlib";
 
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 console.log("Logs from your program will appear here!");
@@ -51,16 +52,17 @@ function handleGet(path: string, incomingData: string[]): string {
   } else if (path.startsWith("/echo/")) {
     const echoText = decodeURIComponent(path.slice(6));
 
-    // Get the compression type from headers
     const acceptEncoding = getHeader(incomingData, "Accept-Encoding");
     console.log("Accept-Encoding:", acceptEncoding);
-    if (!acceptEncoding.includes("gzip")) {
-      console.log("Unsupported encoding:", acceptEncoding);
-      return buildResponse("HTTP/1.1 200 OK", echoText);
+    if (acceptEncoding && acceptEncoding.includes("gzip")) {
+      const compressed = zlib.gzipSync(Buffer.from(echoText));
+      return `HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: ${
+        compressed.length
+      }\r\nContent-Type: application/octet-stream\r\n\r\n${compressed.toString(
+        "binary"
+      )}`;
     }
-    return buildResponse("HTTP/1.1 200 OK", echoText, {
-      "Content-Encoding": "gzip",
-    });
+    return buildResponse("HTTP/1.1 200 OK", echoText);
   } else if (path.startsWith("/user-agent")) {
     console.log("Incoming Data:", incomingData);
     const userAgent = getHeader(incomingData, "User-Agent");
