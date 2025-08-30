@@ -1,5 +1,6 @@
 import * as net from "net";
 import * as fs from "fs";
+import * as process from "process";
 
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 console.log("Logs from your program will appear here!");
@@ -10,7 +11,10 @@ function buildResponse(
   body: string,
   customHeaders: {[key: string]: string} = {}
 ): string {
-  let headers = `${statusLine}\r\nContent-Length: ${body.length}\r\nContent-Type: text/plain`;
+  let headers = `${statusLine}\r\nContent-Length: ${body.length}`;
+  if (!customHeaders["Content-Type"]) {
+    headers += `\r\nContent-Type: text/plain`;
+  }
   for (const [key, value] of Object.entries(customHeaders)) {
     headers += `\r\n${key}: ${value}`;
   }
@@ -30,6 +34,16 @@ function getHeader(incomingData: string[], headerName: string): string {
   return "";
 }
 
+// Parse command line arguments for directory
+let directory = "/tmp/";
+const args = process.argv;
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === "--directory") {
+    directory = args[i + 1];
+    break;
+  }
+}
+
 // Function to handle GET requests
 function handleGet(path: string, incomingData: string[]): string {
   if (path === "/" || path === "/index.html") {
@@ -44,10 +58,15 @@ function handleGet(path: string, incomingData: string[]): string {
     return buildResponse("HTTP/1.1 200 OK", userAgent);
   } else if (path.startsWith("/files/")) {
     const fileName = path.slice(7);
-    const readFile = fs.readFileSync("/tmp/" + fileName, "utf-8");
-    return buildResponse("HTTP/1.1 200 OK", readFile, {
-      "Content-Type": "application/octet-stream",
-    });
+    const filePath = directory + "/" + fileName;
+    try {
+      const readFile = fs.readFileSync(filePath, "utf-8");
+      return buildResponse("HTTP/1.1 200 OK", readFile, {
+        "Content-Type": "application/octet-stream",
+      });
+    } catch (e) {
+      return "HTTP/1.1 404 Not Found\r\n\r\n";
+    }
   } else {
     return buildResponse("HTTP/1.1 404 Not Found", "404 Not Found");
   }
