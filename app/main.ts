@@ -1,11 +1,20 @@
 import * as net from "net";
+import * as fs from "fs";
 
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 console.log("Logs from your program will appear here!");
 
 // Function to build HTTP response
-function buildResponse(statusLine: string, body: string): string {
-  return `${statusLine}\r\nContent-Length: ${body.length}\r\nContent-Type: text/plain\r\n\r\n${body}`;
+function buildResponse(
+  statusLine: string,
+  body: string,
+  customHeaders: {[key: string]: string} = {}
+): string {
+  let headers = `${statusLine}\r\nContent-Length: ${body.length}\r\nContent-Type: text/plain`;
+  for (const [key, value] of Object.entries(customHeaders)) {
+    headers += `\r\n${key}: ${value}`;
+  }
+  return `${headers}\r\n\r\n${body}`;
 }
 
 // Function to extract header value from incomingData
@@ -33,6 +42,12 @@ function handleGet(path: string, incomingData: string[]): string {
     const userAgent = getHeader(incomingData, "User-Agent");
     console.log("User-Agent:", userAgent);
     return buildResponse("HTTP/1.1 200 OK", userAgent);
+  } else if (path.startsWith("/files/")) {
+    const fileName = path.slice(7);
+    const readFile = fs.readFileSync("/tmp/" + fileName, "utf-8");
+    return buildResponse("HTTP/1.1 200 OK", readFile, {
+      "Content-Type": "application/octet-stream",
+    });
   } else {
     return buildResponse("HTTP/1.1 404 Not Found", "404 Not Found");
   }
