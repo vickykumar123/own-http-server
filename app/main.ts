@@ -133,11 +133,16 @@ const server = net.createServer((socket) => {
       result = buildResponse("HTTP/1.1 404 Not Found", "404 Not Found");
     }
 
+    // Echo Connection header if present
+    const connectionHeader = getHeader(incomingData, "Connection");
+    if (connectionHeader) {
+      result.headers += `\r\nConnection: ${connectionHeader}`;
+    }
+
     socket.write(result.headers + "\r\n\r\n");
     socket.write(result.body);
 
     // Close connection only if client requests it
-    const connectionHeader = getHeader(incomingData, "Connection");
     if (connectionHeader === "close") {
       socket.end();
     }
