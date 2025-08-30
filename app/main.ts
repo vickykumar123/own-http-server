@@ -42,8 +42,17 @@ const server = net.createServer((socket) => {
           `\r\n` +
           body;
       } else if (path.startsWith("/user-agent")) {
-        const headerLine = incomingData[1]; // Get the first header line
-        const userAgent = headerLine.split(": ")[1]; // Extract User-Agent value'
+        console.log("Incoming Data:", incomingData);
+        let userAgent = "";
+        for (let i = 1; i < incomingData.length; i++) {
+          const line = incomingData[i];
+          if (line.trim() === "") break; // End of headers
+          if (line.startsWith("User-Agent:")) {
+            userAgent = line.split(": ")[1];
+            break;
+          }
+        }
+        console.log("User-Agent:", userAgent);
         const body = userAgent;
         responseBody =
           `HTTP/1.1 200 OK\r\n` +
