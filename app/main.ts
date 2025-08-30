@@ -31,6 +31,15 @@ const server = net.createServer((socket) => {
           `Content-Type: text/plain\r\n` +
           `\r\n` +
           body;
+      } else if (path.startsWith("/echo/")) {
+        const echoText = decodeURIComponent(path.slice(6)); // Extract text after /echo/
+        const body = echoText;
+        responseBody =
+          `HTTP/1.1 200 OK\r\n` +
+          `Content-Length: ${body.length}\r\n` +
+          `Content-Type: text/plain\r\n` +
+          `\r\n` +
+          body;
       } else {
         const body = "404 Not Found";
         responseBody =
