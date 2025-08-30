@@ -8,7 +8,8 @@ const server = net.createServer((socket) => {
   socket.setEncoding("utf-8");
 
   socket.on("data", (data: any) => {
-    const requestLine = data.split("\r\n")[0]; // Get the request line
+    const incomingData = data.split("\r\n");
+    const requestLine = incomingData[0]; // Get the request line
     const parts = requestLine.split(" "); // Split by spaces
 
     // Check if it's a GET request
@@ -34,6 +35,16 @@ const server = net.createServer((socket) => {
       } else if (path.startsWith("/echo/")) {
         const echoText = decodeURIComponent(path.slice(6)); // Extract text after /echo/
         const body = echoText;
+        responseBody =
+          `HTTP/1.1 200 OK\r\n` +
+          `Content-Length: ${body.length}\r\n` +
+          `Content-Type: text/plain\r\n` +
+          `\r\n` +
+          body;
+      } else if (path.startsWith("/user-agent")) {
+        const headerLine = incomingData[1]; // Get the first header line
+        const userAgent = headerLine.split(": ")[1]; // Extract User-Agent value'
+        const body = userAgent;
         responseBody =
           `HTTP/1.1 200 OK\r\n` +
           `Content-Length: ${body.length}\r\n` +
