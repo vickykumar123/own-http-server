@@ -72,6 +72,22 @@ function handleGet(path: string, incomingData: string[]): string {
   }
 }
 
+function handlePost(path: string, incomingData: string[]): string {
+  if (path.startsWith("/files/")) {
+    const fileName = path.slice(7);
+    const filePath = directory + "/" + fileName;
+    const incomingDataStr = incomingData.join("\r\n");
+    const bodyIndex = incomingDataStr.indexOf("\r\n\r\n");
+    const body = incomingDataStr.slice(bodyIndex + 4);
+    fs.writeFileSync(filePath, body);
+    return buildResponse("HTTP/1.1 201 Created", body, {
+      "Content-Type": "application/octet-stream",
+    });
+  } else {
+    return buildResponse("HTTP/1.1 404 Not Found", "404 Not Found");
+  }
+}
+
 // Uncomment this to pass the first stage
 const server = net.createServer((socket) => {
   socket.setEncoding("utf-8");
@@ -93,6 +109,8 @@ const server = net.createServer((socket) => {
 
     if (method === "GET") {
       responseBody = handleGet(path, incomingData);
+    } else if (method === "POST") {
+      responseBody = handlePost(path, incomingData);
     } else {
       responseBody = buildResponse("HTTP/1.1 404 Not Found", "404 Not Found");
     }
