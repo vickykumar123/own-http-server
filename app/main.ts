@@ -50,7 +50,17 @@ function handleGet(path: string, incomingData: string[]): string {
     return buildResponse("HTTP/1.1 200 OK", "Hello from index!");
   } else if (path.startsWith("/echo/")) {
     const echoText = decodeURIComponent(path.slice(6));
-    return buildResponse("HTTP/1.1 200 OK", echoText);
+
+    // Get the compression type from headers
+    const acceptEncoding = getHeader(incomingData, "Accept-Encoding");
+    console.log("Accept-Encoding:", acceptEncoding);
+    if (acceptEncoding !== "gzip") {
+      console.log("Unsupported encoding:", acceptEncoding);
+      return buildResponse("HTTP/1.1 200 OK", echoText);
+    }
+    return buildResponse("HTTP/1.1 200 OK", echoText, {
+      "Content-Encoding": "gzip",
+    });
   } else if (path.startsWith("/user-agent")) {
     console.log("Incoming Data:", incomingData);
     const userAgent = getHeader(incomingData, "User-Agent");
