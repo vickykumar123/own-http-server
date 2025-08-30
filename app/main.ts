@@ -9,17 +9,18 @@ console.log("Logs from your program will appear here!");
 // Function to build HTTP response
 function buildResponse(
   statusLine: string,
-  body: string,
+  body: string | Buffer,
   customHeaders: {[key: string]: string} = {}
-): string {
-  let headers = `${statusLine}\r\nContent-Length: ${body.length}`;
+): {headers: string; body: string | Buffer} {
+  const bodyLength = Buffer.isBuffer(body) ? body.length : body.length;
+  let headers = `${statusLine}\r\nContent-Length: ${bodyLength}`;
   if (!customHeaders["Content-Type"]) {
     headers += `\r\nContent-Type: text/plain`;
   }
   for (const [key, value] of Object.entries(customHeaders)) {
     headers += `\r\n${key}: ${value}`;
   }
-  return `${headers}\r\n\r\n${body}`;
+  return {headers, body};
 }
 
 // Function to extract header value from incomingData
@@ -46,7 +47,10 @@ for (let i = 0; i < args.length; i++) {
 }
 
 // Function to handle GET requests
-function handleGet(path: string, incomingData: string[]): string {
+function handleGet(
+  path: string,
+  incomingData: string[]
+): {headers: string; body: string | Buffer} {
   if (path === "/" || path === "/index.html") {
     return buildResponse("HTTP/1.1 200 OK", "Hello from index!");
   } else if (path.startsWith("/echo/")) {
@@ -56,11 +60,10 @@ function handleGet(path: string, incomingData: string[]): string {
     console.log("Accept-Encoding:", acceptEncoding);
     if (acceptEncoding && acceptEncoding.includes("gzip")) {
       const compressed = zlib.gzipSync(Buffer.from(echoText));
-      return `HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: ${
-        compressed.length
-      }\r\nContent-Type: application/octet-stream\r\n\r\n${compressed.toString(
-        "binary"
-      )}`;
+      return {
+        headers: `HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: ${compressed.length}\r\nContent-Type: text/plain`,
+        body: compressed,
+      };
     }
     return buildResponse("HTTP/1.1 200 OK", echoText);
   } else if (path.startsWith("/user-agent")) {
@@ -77,14 +80,17 @@ function handleGet(path: string, incomingData: string[]): string {
         "Content-Type": "application/octet-stream",
       });
     } catch (e) {
-      return "HTTP/1.1 404 Not Found\r\n\r\n";
+      return {headers: "HTTP/1.1 404 Not Found", body: ""};
     }
   } else {
     return buildResponse("HTTP/1.1 404 Not Found", "404 Not Found");
   }
 }
 
-function handlePost(path: string, incomingData: string[]): string {
+function handlePost(
+  path: string,
+  incomingData: string[]
+): {headers: string; body: string | Buffer} {
   if (path.startsWith("/files/")) {
     const fileName = path.slice(7);
     const filePath = directory + "/" + fileName;
@@ -102,10 +108,10 @@ function handlePost(path: string, incomingData: string[]): string {
 
 // Uncomment this to pass the first stage
 const server = net.createServer((socket) => {
-  socket.setEncoding("utf-8");
+  // socket.setEncoding("utf-8");
 
-  socket.on("data", (data: any) => {
-    const incomingData = data.split("\r\n");
+  socket.on("data", (data: Buffer) => {
+    const incomingData = data.toString().split("\r\n");
     const requestLine = incomingData[0];
     const parts = requestLine.split(" ");
 
@@ -117,17 +123,18 @@ const server = net.createServer((socket) => {
     console.log("Request target:", path);
     console.log("HTTP version:", httpVersion);
 
-    let responseBody = "";
+    let result: {headers: string; body: string | Buffer};
 
     if (method === "GET") {
-      responseBody = handleGet(path, incomingData);
+      result = handleGet(path, incomingData);
     } else if (method === "POST") {
-      responseBody = handlePost(path, incomingData);
+      result = handlePost(path, incomingData);
     } else {
-      responseBody = buildResponse("HTTP/1.1 404 Not Found", "404 Not Found");
+      result = buildResponse("HTTP/1.1 404 Not Found", "404 Not Found");
     }
 
-    socket.write(responseBody);
+    socket.write(result.headers + "\r\n\r\n");
+    socket.write(result.body);
     socket.end();
   });
 });
